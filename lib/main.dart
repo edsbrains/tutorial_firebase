@@ -27,6 +27,11 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
+  final CollectionReference _movieCollection =
+      Firestore.instance.collection("movie_collection");
+
+  final _textMovieController = TextEditingController();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -34,7 +39,7 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text(widget.title),
       ),
       body: StreamBuilder(
-        stream: Firestore.instance.collection("movie_collection").snapshots(),
+        stream: _movieCollection.snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) print(snapshot.error);
           switch (snapshot.connectionState) {
@@ -44,22 +49,83 @@ class _MyHomePageState extends State<MyHomePage> {
               return ListView.builder(
                 itemCount: snapshot.data.documents.length,
                 itemBuilder: (context, index) {
-                  return ListTile(
-                      title: Text(snapshot.data.documents[index]["name"],
-                          style: TextStyle(fontSize: 24)),
-                      trailing: Text(
-                          snapshot.data.documents[index]["votes"].toString(),
-                          style: TextStyle(fontSize: 24)));
+                  return _mainContent(snapshot.data.documents[index]);
                 },
               );
           }
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {},
+        onPressed: () {
+          showDialog(
+              barrierDismissible: true,
+              context: context,
+              builder: (context) {
+                _textMovieController.clear();
+                return AlertDialog(
+                  title: Text("Add movie to vote"),
+                  content: TextField(controller: _textMovieController),
+                  actions: <Widget>[
+                    FlatButton(
+                      child: Text('Close'),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                    FlatButton(
+                      child: Text('Save'),
+                      onPressed: () {
+                        _movieCollection.document().setData({
+                          "name": _textMovieController.text,
+                          "votes": 0
+                        }).whenComplete(() => Navigator.of(context).pop());
+                      },
+                    ),
+                  ],
+                );
+              });
+        },
         tooltip: 'Increment',
         child: Icon(Icons.add),
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
+  }
+
+  ListTile _mainContent(DocumentSnapshot data) {
+    return ListTile(
+        onTap: () {
+          data.reference.updateData({"votes": data["votes"] + 1});
+        },
+        onLongPress: () {
+          DocumentSnapshot dataView = data;
+
+          showDialog(
+              context: context,
+              builder: (context) {
+                return AlertDialog(
+                  title: Text("Remove movie"),
+                  content:
+                      Text(dataView["name"], style: TextStyle(fontSize: 18)),
+                  actions: <Widget>[
+                    FlatButton(
+                      child: Text('Close'),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                    FlatButton(
+                      child: Text('Delete'),
+                      onPressed: () {
+                        dataView.reference.delete();
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ],
+                );
+              });
+        },
+        title: Text(data["name"], style: TextStyle(fontSize: 24)),
+        trailing:
+            Text(data["votes"].toString(), style: TextStyle(fontSize: 24)));
   }
 }
